@@ -1,25 +1,11 @@
-require('dotenv').config();
 const axios = require('axios');
 const SocksProxyAgent = require('socks-proxy-agent');
 const { SogniClient } = require('@sogni-ai/sogni-client');
-const winston = require('winston');
 
-// Konfigurasi dari environment variables
-const DELAY_INTERVAL = parseInt(process.env.DELAY_INTERVAL, 10) || 5000; // ms delay antar iterasi
-const MAX_RETRY = parseInt(process.env.MAX_RETRY, 10) || 3;                // jumlah maksimal retry
-const BASE_BACKOFF = parseInt(process.env.BASE_BACKOFF, 10) || 2000;         // delay dasar untuk backoff (ms)
-
-// Inisialisasi logger menggunakan Winston
-const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.printf(
-      info => `[${info.timestamp}] ${info.level.toUpperCase()}: ${info.message}`
-    )
-  ),
-  transports: [new winston.transports.Console()]
-});
+// Konstanta konfigurasi (delay lebih cepat)
+const DELAY_INTERVAL = 2000; // 2 detik antar iterasi
+const MAX_RETRY = 3;         // jumlah maksimal retry
+const BASE_BACKOFF = 500;    // delay dasar untuk backoff (500 ms)
 
 // Validasi sederhana URL proxy
 function isValidProxyUrl(url) {
@@ -102,35 +88,38 @@ const prompts = [
   { positivePrompt: "A dreamy pastel-colored sky with floating islands", stylePrompt: "surreal" }
 ];
 
-// Objek untuk menyimpan data akumulasi per akun:
+// Objek untuk menyimpan data akumulasi per akun.
 // Struktur: { [username]: { totalGambar: number, ip: string, timestamp: string } }
 const accountStats = {};
 
 // Graceful shutdown flag
 let shuttingDown = false;
 process.on('SIGINT', () => {
-  logger.info('SIGINT diterima, menghentikan proses...');
+  console.log('SIGINT diterima, menghentikan proses...');
   shuttingDown = true;
 });
 process.on('SIGTERM', () => {
-  logger.info('SIGTERM diterima, menghentikan proses...');
+  console.log('SIGTERM diterima, menghentikan proses...');
   shuttingDown = true;
 });
 
 /**
- * Fungsi untuk mencoba membuat project dengan reconnect jika terjadi error "Project not found".
- * Jika error terjadi karena errorCode 102, akan dilakukan re-login dan mencoba ulang.
- * Menggunakan exponential backoff untuk retry.
+ * Fungsi untuk mencoba membuat project.
+ * Jika error karena "Project not found" (errorCode 102), maka buat instance baru dan re-login.
+ * Menggunakan exponential backoff untuk retry error lainnya.
  *
- * @param {Object} client - Instance SogniClient.
  * @param {Object} account - Data akun.
  * @param {string} modelId - ID model yang dipilih.
  * @param {Object} prompt - Objek prompt yang akan digunakan.
  * @param {number} retry - Percobaan ke berapa (default: 1).
  * @returns {Promise<number>} - Mengembalikan jumlah gambar (misalnya 1) jika berhasil, atau 0 jika gagal.
  */
-async function createProjectWithReconnect(client, account, modelId, prompt, retry = 1) {
+async function createProjectWithRelogin(account, modelId, prompt, retry = 1) {
   try {
+    // Buat instance baru dan lakukan login
+    const client = await SogniClient.createInstance({ appId: account.appid, network: 'fast' });
+    await client.account.login(account.username, account.password);
+
     const project = await client.projects.create({
       modelId,
       disableNSFWFilter: true,
@@ -143,39 +132,37 @@ async function createProjectWithReconnect(client, account, modelId, prompt, retr
     });
 
     project.on('progress', (progress) => {
-      logger.info(`[${account.username}] Progres: ${progress}`);
+      console.log(`[${account.username}] Progres: ${progress}`);
     });
 
     await project.waitForCompletion();
-    return 1; // Misal 1 gambar berhasil
+    return 1; // Misalnya, 1 gambar berhasil
   } catch (err) {
-    logger.error(`[${account.username}] Error membuat project: ${err.message}`);
+    console.error(`[${account.username}] Error membuat project: ${err.message}`);
 
-    // Jika error karena "Project not found", coba re-login dan retry
+    // Jika error karena "Project not found", lakukan re-login dengan membuat instance baru
     if (err.status === 404 && err.payload?.errorCode === 102) {
-      logger.warn(`[${account.username}] Project not found, mencoba re-login...`);
+      console.warn(`[${account.username}] Project tidak ditemukan, melakukan re-login dan reinitialize client...`);
       try {
-        await client.account.login(account.username, account.password);
-        logger.info(`[${account.username}] Re-login berhasil, mencoba ulang...`);
-        return await createProjectWithReconnect(client, account, modelId, prompt, retry);
-      } catch (loginErr) {
-        logger.error(`[${account.username}] Gagal re-login: ${loginErr.message}`);
+        return await createProjectWithRelogin(account, modelId, prompt, retry);
+      } catch (innerErr) {
+        console.error(`[${account.username}] Reinitialize client gagal: ${innerErr.message}`);
         return 0;
       }
     }
 
-    // Jika sudah mencapai batas retry, hentikan
+    // Jika sudah mencapai batas retry, hentikan percobaan
     if (retry >= MAX_RETRY) {
-      logger.error(`[${account.username}] Gagal setelah ${MAX_RETRY} percobaan. Berhenti.`);
+      console.error(`[${account.username}] Gagal setelah ${MAX_RETRY} percobaan. Berhenti.`);
       return 0;
     }
 
-    // Exponential backoff untuk retry
+    // Exponential backoff untuk retry (jika error lain)
     const delay = BASE_BACKOFF * (2 ** (retry - 1));
-    logger.info(`[${account.username}] Menunggu ${delay / 1000} detik sebelum mencoba ulang (retry ${retry}/${MAX_RETRY})...`);
+    console.log(`[${account.username}] Menunggu ${delay} ms sebelum mencoba ulang (retry ${retry}/${MAX_RETRY})...`);
     await new Promise(res => setTimeout(res, delay));
 
-    return await createProjectWithReconnect(client, account, modelId, prompt, retry + 1);
+    return await createProjectWithRelogin(account, modelId, prompt, retry + 1);
   }
 }
 
@@ -189,18 +176,19 @@ async function processAccount(account) {
   try {
     ip = await connectToProxy(account.proxy);
   } catch (err) {
-    logger.error(`[${account.username}] Error koneksi proxy: ${err.message}`);
+    console.error(`[${account.username}] Error koneksi proxy: ${err.message}`);
     if (!accountStats[account.username]) {
       accountStats[account.username] = { totalGambar: 0, ip, timestamp: new Date().toLocaleString() };
     }
     return;
   }
 
+  // Dapatkan instance awal untuk login dan mendapatkan model
   let client;
   try {
     client = await SogniClient.createInstance({ appId: account.appid, network: 'fast' });
   } catch (err) {
-    logger.error(`[${account.username}] Gagal membuat instance SogniClient: ${err.message}`);
+    console.error(`[${account.username}] Gagal membuat instance SogniClient: ${err.message}`);
     if (!accountStats[account.username]) {
       accountStats[account.username] = { totalGambar: 0, ip, timestamp: new Date().toLocaleString() };
     }
@@ -218,7 +206,7 @@ async function processAccount(account) {
   try {
     await login();
   } catch (err) {
-    logger.error(`[${account.username}] Gagal login: ${err.message}`);
+    console.error(`[${account.username}] Gagal login: ${err.message}`);
     if (!accountStats[account.username]) {
       accountStats[account.username] = { totalGambar: 0, ip, timestamp: new Date().toLocaleString() };
     }
@@ -229,7 +217,7 @@ async function processAccount(account) {
   try {
     models = await client.projects.waitForModels();
   } catch (err) {
-    logger.error(`[${account.username}] Gagal mendapatkan model: ${err.message}`);
+    console.error(`[${account.username}] Gagal mendapatkan model: ${err.message}`);
     if (!accountStats[account.username]) {
       accountStats[account.username] = { totalGambar: 0, ip, timestamp: new Date().toLocaleString() };
     }
@@ -245,16 +233,16 @@ async function processAccount(account) {
   const currentPrompt = prompts[0];
 
   try {
-    const gambarDihasilkan = await createProjectWithReconnect(client, account, mostPopularModel.id, currentPrompt);
+    const gambarDihasilkan = await createProjectWithRelogin(account, mostPopularModel.id, currentPrompt);
     if (!accountStats[account.username]) {
       accountStats[account.username] = { totalGambar: 0, ip, timestamp: new Date().toLocaleString() };
     }
     accountStats[account.username].totalGambar += gambarDihasilkan;
     accountStats[account.username].ip = ip;
     accountStats[account.username].timestamp = new Date().toLocaleString();
-    logger.info(`[${account.username}] Project berhasil. Total gambar: ${accountStats[account.username].totalGambar}`);
+    console.log(`[${account.username}] Project berhasil. Total gambar: ${accountStats[account.username].totalGambar}`);
   } catch (err) {
-    logger.error(`[${account.username}] Error pada proses project: ${err.message}`);
+    console.error(`[${account.username}] Error pada proses project: ${err.message}`);
     if (!accountStats[account.username]) {
       accountStats[account.username] = { totalGambar: 0, ip, timestamp: new Date().toLocaleString() };
     }
@@ -281,7 +269,7 @@ async function main() {
     console.table(tableData);
     await new Promise(res => setTimeout(res, DELAY_INTERVAL));
   }
-  logger.info('Proses dihentikan.');
+  console.log('Proses dihentikan.');
   process.exit(0);
 }
 
