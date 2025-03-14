@@ -1,6 +1,3 @@
-Berikut contoh isi file **README.md** yang bisa Anda gunakan untuk proyek ini:
-
----
 
 # Sogni Image Generator
 
