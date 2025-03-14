@@ -36,7 +36,7 @@ Proyek ini adalah aplikasi Node.js yang mengintegrasikan SogniClient untuk mengh
 2. **Install Dependensi:**
 
    ```bash
-   npm install axios socks-proxy-agent https-proxy-agent @sogni-ai/sogni-client dotenv winston
+   npm install axios socks-proxy-agent https-proxy-agent @sogni-ai/sogni-client
    ```
 
    Pastikan semua paket yang dibutuhkan telah terinstall.
