@@ -3,7 +3,7 @@ const SocksProxyAgent = require('socks-proxy-agent');
 const { SogniClient } = require('@sogni-ai/sogni-client');
 
 // Konstanta konfigurasi (delay lebih cepat)
-const DELAY_INTERVAL = 2000; // 2 detik antar iterasi
+const DELAY_INTERVAL = 5000; // 2 detik antar iterasi
 const MAX_RETRY = 3;         // jumlah maksimal retry
 const BASE_BACKOFF = 500;    // delay dasar untuk backoff (500 ms)
 
