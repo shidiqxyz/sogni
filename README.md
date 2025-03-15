@@ -98,7 +98,8 @@ Aplikasi akan memproses semua akun secara paralel dalam infinite loop. Setiap it
 Agar aplikasi berjalan stabil, gunakan PM2 untuk otomatis restart setiap 10 menit:
 
 ```bash
-pm2 start index.js --name sogni-bot --restart-delay 600000
+pm2 start index.js --name sogni-bot  
+pm2 restart sogni-bot --cron "*/10 * * * *"
 ```
 
 Ini akan memastikan aplikasi tetap berjalan tanpa gangguan dalam jangka waktu lama.
