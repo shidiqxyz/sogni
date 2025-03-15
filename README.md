@@ -1,7 +1,10 @@
-
 # Sogni Image Generator
 
 Proyek ini adalah aplikasi Node.js yang mengintegrasikan SogniClient untuk menghasilkan gambar secara otomatis melalui akun-akun yang berbeda. Aplikasi menggunakan proxy (HTTP/HTTPS atau SOCKS) untuk mendapatkan IP publik masing-masing akun dan melakukan request secara terus-menerus (infinite loop). Hasil akumulasi jumlah gambar per akun ditampilkan dalam bentuk tabel dengan kolom: **akun**, **total gambar**, **timestamp** (waktu terakhir sukses), dan **ip**.
+
+## Daftar Sogni
+
+Silakan daftar di [Sogni AI](https://app.sogni.ai/) dan gunakan referral: **shidiq**.
 
 ## Fitur
 
@@ -90,6 +93,17 @@ Aplikasi akan memproses semua akun secara paralel dalam infinite loop. Setiap it
 - **Error Handling:** Jika terjadi error (misalnya gagal koneksi proxy atau login), aplikasi tidak akan mengakumulasi gambar dan akan menyimpan data awal (total gambar = 0).
 - **Log:** Aplikasi akan mengosongkan output console (`console.clear()`) setiap iterasi sehingga hanya tampilan tabel yang terlihat.
 
+## Penggunaan PM2 untuk Restart Otomatis
+
+Agar aplikasi berjalan stabil, gunakan PM2 untuk otomatis restart setiap 10 menit:
+
+```bash
+pm2 start index.js --name sogni-bot --restart-delay 600000
+```
+
+Ini akan memastikan aplikasi tetap berjalan tanpa gangguan dalam jangka waktu lama.
+
 ## Lisensi
 
 Proyek ini bersifat open-source. Silakan lihat file [LICENSE](LICENSE) untuk informasi lebih lanjut.
+
