@@ -42,13 +42,6 @@ Silakan daftar di [Sogni AI](https://app.sogni.ai/) dan gunakan referral: **shid
 
    Sesuaikan array `prompts` jika ingin menggunakan prompt berbeda untuk pembuatan gambar. Secara default, prompt pertama yang digunakan.
 
-## Cara Menjalankan
-
-Jalankan aplikasi dengan perintah berikut:
-
-```bash
-node index.js
-```
 
 ## Penggunaan PM2 untuk Restart Otomatis
 
@@ -59,4 +52,11 @@ pm2 start index.js --name sogni-bot
 pm2 restart sogni-bot --cron "*/10 * * * *"
 ```
 
-Ini akan memastikan aplikasi tetap berjalan tanpa gangguan dalam jangka waktu lama.
+Untuk mengecek logs
+```bash
+pm2 logs
+```
+Untuk melihat list pm2
+```bash
+pm2 ls
+```
