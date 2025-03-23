@@ -41,6 +41,12 @@ Silakan daftar di [Sogni AI](https://app.sogni.ai/) dan gunakan referral: **shid
 2. **Prompt:**
 
    Sesuaikan array `prompts` jika ingin menggunakan prompt berbeda untuk pembuatan gambar. Secara default, prompt pertama yang digunakan.
+   
+3. **Proxy**
+   Untuk formatnya gunakan sepertini
+   ```bash
+   protocol://login:password@hostname:port	
+   ```
 
 
 ## Penggunaan PM2 untuk Restart Otomatis
