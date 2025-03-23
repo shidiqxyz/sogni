@@ -1,0 +1,9 @@
+
+{
+ "type": "module",
+  "dependencies": {
+    "@sogni-ai/sogni-client": "^2.0.2",
+    "node-fetch": "^3.3.2",
+    "undici": "^7.5.0"
+  }
+}
