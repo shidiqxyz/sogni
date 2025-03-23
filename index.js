@@ -1,21 +1,21 @@
 import { SogniClient } from '@sogni-ai/sogni-client';
-import { HttpsProxyAgent } from 'https-proxy-agent';
+import { setGlobalDispatcher, ProxyAgent } from 'undici';
+import fetch from 'node-fetch';
 
-// Daftar akun dengan proxy masing-masing
+// Daftar akun & proxy
 const accounts = [
   {
     username: 'akun1',
     password: 'password1',
     appid: 'appid1',
-    proxy: 'http://username:pass@hostname:port'
+    proxy: 'http://username1:password1@hostname1:port'
   },
   {
     username: 'akun2',
     password: 'password2',
     appid: 'appid2',
-    proxy: 'http://username:pass@hostname:port'
+    proxy: 'http://username2:password2@hostname2:port'
   }
-  // Tambahkan akun lainnya jika diperlukan
 ];
 
 // Daftar style prompt dan daftar prompt lainnya
@@ -34,48 +34,57 @@ const modelIds = [
   'coreml-bluePencilXL_v700', 'coreml-artUniverse_sdxlV60', 'coreml-lcm_cyberrealistic42_768'
 ];
 
-// Fungsi untuk memilih elemen acak dari array
 const getRandomElement = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const getRandomPrompt = () => `${getRandomElement(subjects)} ${getRandomElement(actions)} ${getRandomElement(environments)} ${getRandomElement(moods)}`;
+const getRandomModelId = () => getRandomElement(modelIds);
 
-// Fungsi untuk membuat prompt acak
-const getRandomPrompt = () => {
-  return `${getRandomElement(subjects)} ${getRandomElement(actions)} ${getRandomElement(environments)} ${getRandomElement(moods)}`;
-};
+// Fungsi delay acak antara 1 - 5 detik
+const delay = () => new Promise(resolve => setTimeout(resolve, Math.floor(Math.random() * 2000) + 1000));
 
-// Fungsi untuk delay acak antara 1 hingga 3 detik
-const delay = () => new Promise(resolve => setTimeout(resolve, Math.random() * 2000 + 1000));
-
-// Fungsi untuk login ke SogniClient dengan proxy
-const connectProxy = async ({ username, password, appid, proxy }) => {
+// Fungsi untuk mengecek IP melalui proxy
+const checkIP = async (proxy) => {
   try {
-    const agent = new HttpsProxyAgent(proxy);
-    const options = { appId: appid, network: 'fast', fetchOptions: { agent } };
-
-    const client = await SogniClient.createInstance(options);
-    await client.account.login(username, password);
-    console.log(`✅ [${username}] Login berhasil melalui proxy ${proxy}`);
-
-    return client;
+    const agent = new ProxyAgent(proxy);
+    const response = await fetch('https://api64.ipify.org?format=json', { dispatcher: agent });
+    const data = await response.json();
+    console.log(`🌍 IP melalui proxy ${proxy}:`, data.ip);
   } catch (error) {
-    console.error(`❌ [${username}] Gagal login:`, error);
-    return null;
+    console.error(`❌ Gagal cek IP melalui proxy ${proxy}:`, error);
   }
 };
 
-// Fungsi untuk menghasilkan gambar
+// Fungsi untuk login dengan SogniClient melalui proxy
+const connectProxy = async (account) => {
+  console.log(`🔄 Menggunakan proxy: ${account.proxy}`);
+
+  // Set proxy untuk semua request
+  setGlobalDispatcher(new ProxyAgent(account.proxy));
+
+  // Cek IP sebelum login
+  await checkIP(account.proxy);
+
+  // Koneksi ke SogniClient
+  const client = await SogniClient.createInstance({ appId: account.appid, network: 'fast' });
+  await client.account.login(account.username, account.password);
+  console.log(`✅ [${account.username}] Login berhasil melalui proxy!`);
+
+  return client;
+};
+
+// Fungsi untuk menghasilkan gambar AI
 const generateImage = async (client, username) => {
   let i = 1;
-  const loopGenerate = async () => {
+  while (true) {
+    const randomPrompt = getRandomPrompt();
+    const randomStyle = getRandomElement(styles);
+    const randomModelId = getRandomModelId();
+
+    console.log(`🎨 Generating image ${i} for ${username}: "${randomPrompt}" with style "${randomStyle}" using model "${randomModelId}"`);
+
     try {
-      const randomPrompt = getRandomPrompt();
-      const randomStyle = getRandomElement(styles);
-      const randomModelId = getRandomElement(modelIds);
-
-      console.log(`🎨 [${username}] Generating image ${i}: "${randomPrompt}" dengan style "${randomStyle}" dan model "${randomModelId}"`);
-
       const project = await client.projects.create({
         modelId: randomModelId,
-        disableNSFWFilter: true, // Matikan filter NSFW
+        disableNSFWFilter: true,
         positivePrompt: randomPrompt,
         negativePrompt: 'malformation, bad anatomy, low quality, jpeg artifacts, watermark',
         stylePrompt: randomStyle,
@@ -85,29 +94,31 @@ const generateImage = async (client, username) => {
       });
 
       project.on('progress', (progress) => {
-        console.log(`⏳ [${username}] Progress ${i}:`, progress);
+        console.log(`⏳ [${username}] Progres ${i}:`, progress);
       });
 
       const imageUrls = await project.waitForCompletion();
       console.log(`✅ [${username}] Gambar ${i} selesai! URL:`, imageUrls);
 
       i++;
-      await delay();
-      loopGenerate();
     } catch (error) {
       console.error(`❌ [${username}] Gagal generate gambar:`, error);
     }
-  };
 
-  loopGenerate();
+    await delay(); // Tunggu sebelum generate gambar berikutnya
+  }
 };
 
-// Jalankan login untuk setiap akun dengan proxy masing-masing dan mulai generate gambar
-(async () => {
+// Fungsi utama untuk menjalankan banyak akun
+const main = async () => {
   for (const account of accounts) {
-    const client = await connectProxy(account);
-    if (client) {
+    try {
+      const client = await connectProxy(account);
       generateImage(client, account.username);
+    } catch (error) {
+      console.error(`❌ Gagal login untuk ${account.username}:`, error);
     }
   }
-})();
+};
+
+main();
