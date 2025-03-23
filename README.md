@@ -52,11 +52,12 @@ pm2 start index.js --name sogni-bot
 pm2 restart sogni-bot --cron "*/10 * * * *"
 ```
 
-Untuk mengecek logs
-```bash
-pm2 logs
-```
 Untuk melihat list pm2
 ```bash
 pm2 ls
+```
+
+Untuk mengecek logs
+```bash
+pm2 logs name
 ```
